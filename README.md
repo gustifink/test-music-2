@@ -65,6 +65,14 @@ This project includes an **AI Model Verifier** - a Playwright-based testing fram
 - **HTML Report Viewer**: Detailed step-by-step test analysis with screenshots
 - **Screenshot Capture**: Automatic screenshots at each step for debugging
 
+### Prerequisites
+
+> ⚠️ Complete the [Installation Guide](#%EF%B8%8F-installation-guide) first, then install Playwright browsers:
+
+```bash
+npx playwright install
+```
+
 ### Running the Verifier
 
 1. **Start the music player** (in one terminal):
@@ -76,7 +84,7 @@ This project includes an **AI Model Verifier** - a Playwright-based testing fram
 2. **Start the Verifier API** (in another terminal):
 
    ```bash
-   node executor/api-server.js
+   npm run api
    ```
 
 3. **Open the Verifier UI**:
