@@ -1,0 +1,41 @@
+version: '3.8'
+
+services:
+  # The Spotify Clone React App
+  spotify-app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "5173:5173"
+    volumes:
+      - ./src:/app/src
+      - ./public:/app/public
+    environment:
+      - VITE_HOST=0.0.0.0
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:5173" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # The Execution Runner (Playwright + Gemini)
+  executor:
+    build:
+      context: .
+      dockerfile: Dockerfile.executor
+    depends_on:
+      spotify-app:
+        condition: service_healthy
+    volumes:
+      - ./executions:/app/executions
+      - ./executor:/app/executor
+      - ./tests:/app/tests
+    environment:
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
+      - SPOTIFY_APP_URL=http://spotify-app:5173
+      - HEADLESS=true
+    command: [ "node", "executor/run-execution.js" ]
+
+volumes:
+  executions:

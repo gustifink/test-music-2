@@ -1,0 +1,565 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Model Verifier</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                        mono: ['JetBrains Mono', 'monospace']
+                    },
+                    colors: {
+                        zinc: {
+                            850: '#1f1f23',
+                            950: '#09090b'
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+        }
+
+        .hide-scrollbar::-webkit-scrollbar {
+            display: none;
+        }
+
+        .hide-scrollbar {
+            -ms-overflow-style: none;
+            scrollbar-width: none;
+        }
+
+        .card {
+            @apply bg-zinc-900 border border-zinc-800 rounded-lg;
+        }
+
+        .code-block {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 11px;
+            line-height: 1.5;
+        }
+
+        .code-keyword {
+            color: #c586c0;
+        }
+
+        .code-function {
+            color: #dcdcaa;
+        }
+
+        .code-string {
+            color: #ce9178;
+        }
+
+        .code-comment {
+            color: #6a9955;
+        }
+
+        .code-variable {
+            color: #9cdcfe;
+        }
+
+        .code-type {
+            color: #4ec9b0;
+        }
+    </style>
+</head>
+
+<body class="bg-zinc-950 text-zinc-100 min-h-screen antialiased">
+    <div id="app" class="p-8 max-w-7xl mx-auto">
+        <!-- Header -->
+        <div class="mb-6">
+            <div class="flex items-center gap-3 mb-2">
+                <div class="p-2 bg-zinc-900 rounded-lg border border-zinc-800">
+                    <svg class="w-6 h-6 text-zinc-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                    </svg>
+                </div>
+                <div>
+                    <h1 class="text-2xl font-semibold text-zinc-100">AI Model Verifier</h1>
+                    <p class="text-sm text-zinc-500">Test and verify AI agent task completion</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- API Status / Error Banner -->
+        <div id="error-banner"
+            class="hidden mb-4 p-4 rounded-lg bg-red-950/50 border border-red-900/50 flex items-center gap-3">
+            <svg class="w-5 h-5 text-red-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                    d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+            </svg>
+            <span id="error-message" class="text-red-400 text-sm flex-1"></span>
+            <button onclick="hideError()" class="text-red-400 hover:text-red-300 p-1">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+            </button>
+        </div>
+
+        <div class="flex items-center gap-2 mb-6">
+            <div id="api-status-dot" class="w-2 h-2 rounded-full bg-zinc-600"></div>
+            <span id="api-status-text" class="text-xs text-zinc-500">Connecting...</span>
+        </div>
+
+        <!-- Stats Bar -->
+        <div class="grid grid-cols-4 gap-4 mb-6">
+            <div class="card p-4">
+                <div class="text-xs font-medium text-zinc-500 uppercase tracking-wide mb-1">Total Runs</div>
+                <div id="stat-total" class="text-3xl font-semibold text-zinc-100">0</div>
+            </div>
+            <div class="card p-4">
+                <div class="text-xs font-medium text-zinc-500 uppercase tracking-wide mb-1">Passed</div>
+                <div id="stat-passed" class="text-3xl font-semibold text-emerald-500">0</div>
+            </div>
+            <div class="card p-4">
+                <div class="text-xs font-medium text-zinc-500 uppercase tracking-wide mb-1">Failed</div>
+                <div id="stat-failed" class="text-3xl font-semibold text-red-500">0</div>
+            </div>
+            <div class="card p-4">
+                <div class="text-xs font-medium text-zinc-500 uppercase tracking-wide mb-1">Success Rate</div>
+                <div id="stat-rate" class="text-3xl font-semibold text-zinc-100">0%</div>
+            </div>
+        </div>
+
+        <!-- Main Grid -->
+        <div class="grid grid-cols-12 gap-6">
+            <!-- Left Column - 3 cols -->
+            <div class="col-span-3 space-y-4">
+                <!-- Task Card -->
+                <div class="card p-4">
+                    <div class="flex items-center gap-2 mb-3">
+                        <svg class="w-4 h-4 text-zinc-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                        </svg>
+                        <span class="text-sm font-medium text-zinc-300">Task</span>
+                    </div>
+                    <div class="bg-zinc-950 rounded-md p-3 border border-zinc-800">
+                        <h3 class="text-sm font-medium text-zinc-200 mb-2">Create Playlist & Play</h3>
+                        <p class="text-xs text-zinc-500 leading-relaxed mb-3">"Create a playlist, add a song, and play
+                            it."</p>
+                        <div class="space-y-1.5">
+                            <div class="text-[10px] text-zinc-600 uppercase tracking-wide font-medium">Steps</div>
+                            <div class="text-[11px] text-zinc-500 flex items-start gap-1.5"><span
+                                    class="text-emerald-500 mt-0.5">1.</span>Click "Create" → Playlist</div>
+                            <div class="text-[11px] text-zinc-500 flex items-start gap-1.5"><span
+                                    class="text-emerald-500 mt-0.5">2.</span>Add song via context menu</div>
+                            <div class="text-[11px] text-zinc-500 flex items-start gap-1.5"><span
+                                    class="text-emerald-500 mt-0.5">3.</span>Play the song</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Model Selector -->
+                <div class="card p-4">
+                    <div class="flex items-center gap-2 mb-3">
+                        <svg class="w-4 h-4 text-zinc-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+                        </svg>
+                        <span class="text-sm font-medium text-zinc-300">Model</span>
+                    </div>
+                    <div id="model-selector" class="space-y-2"></div>
+
+                    <button id="run-btn" onclick="runExecution()"
+                        class="w-full mt-4 py-2.5 px-4 rounded-md font-medium text-sm bg-zinc-100 text-zinc-900 hover:bg-zinc-200 transition-colors flex items-center justify-center gap-2">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                        Run Execution
+                    </button>
+                </div>
+            </div>
+
+            <!-- Middle Column - Execution History - 4 cols -->
+            <div class="col-span-4 card p-4">
+                <div class="flex items-center gap-2 mb-3">
+                    <svg class="w-4 h-4 text-zinc-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    <span class="text-sm font-medium text-zinc-300">History</span>
+                </div>
+                <div id="execution-list" class="space-y-2 max-h-[520px] overflow-y-auto hide-scrollbar">
+                    <div class="text-zinc-600 text-sm text-center py-12">No executions yet</div>
+                </div>
+            </div>
+
+            <!-- Right Column - Details - 5 cols -->
+            <div class="col-span-5 card p-4">
+                <div class="flex items-center gap-2 mb-3">
+                    <svg class="w-4 h-4 text-zinc-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                    </svg>
+                    <span class="text-sm font-medium text-zinc-300">Details</span>
+                </div>
+                <div id="execution-details" class="text-center text-zinc-600 py-16">
+                    <svg class="w-12 h-12 mx-auto mb-3 text-zinc-700" fill="none" stroke="currentColor"
+                        viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"
+                            d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                    </svg>
+                    <div class="text-sm">Select an execution to view</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Verification Function Section -->
+        <div class="mt-6 card p-4">
+            <div class="flex items-center gap-2 mb-4">
+                <svg class="w-4 h-4 text-zinc-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                        d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4" />
+                </svg>
+                <span class="text-sm font-medium text-zinc-300">Verification Function</span>
+                <span
+                    class="text-[10px] px-2 py-0.5 rounded bg-zinc-800 text-zinc-400 border border-zinc-700">src/utils/verifier.js</span>
+            </div>
+            <div class="bg-zinc-950 rounded-md p-4 border border-zinc-800 overflow-x-auto">
+                <pre class="code-block text-zinc-300"><span class="code-comment">/**
+ * Verify if a task was completed based on app action log
+ * Returns: { score: 0|1, passed: boolean, details: Object }
+ */</span>
+<span class="code-keyword">function</span> <span class="code-function">verifyTask</span>(<span class="code-variable">actionLog</span>, <span class="code-variable">taskType</span>) {
+    <span class="code-comment">// Find required actions in the log</span>
+    <span class="code-keyword">const</span> <span class="code-variable">playlistCreated</span> = actionLog.<span class="code-function">find</span>(a => a.type === <span class="code-string">'PLAYLIST_CREATED'</span>);
+    <span class="code-keyword">const</span> <span class="code-variable">songAdded</span> = actionLog.<span class="code-function">find</span>(a => a.type === <span class="code-string">'SONG_ADDED_TO_PLAYLIST'</span>);
+    <span class="code-keyword">const</span> <span class="code-variable">playbackStarted</span> = actionLog.<span class="code-function">find</span>(a => a.type === <span class="code-string">'PLAYBACK_STARTED'</span>);
+
+    <span class="code-keyword">const</span> <span class="code-variable">checks</span> = {
+        <span class="code-variable">playlistCreated</span>: !!playlistCreated,     <span class="code-comment">// ✓ Playlist was created</span>
+        <span class="code-variable">songAdded</span>: !!songAdded,                 <span class="code-comment">// ✓ Song was added</span>
+        <span class="code-variable">playbackStarted</span>: !!playbackStarted,     <span class="code-comment">// ✓ Playback started</span>
+    };
+
+    <span class="code-keyword">const</span> <span class="code-variable">allPassed</span> = checks.playlistCreated && checks.songAdded && checks.playbackStarted;
+
+    <span class="code-keyword">return</span> {
+        <span class="code-variable">score</span>: allPassed ? <span class="code-string">1</span> : <span class="code-string">0</span>,
+        <span class="code-variable">passed</span>: allPassed,
+        <span class="code-variable">details</span>: checks
+    };
+}</pre>
+            </div>
+            <div class="mt-3 flex items-center gap-4 text-[11px]">
+                <div class="flex items-center gap-1.5">
+                    <div class="w-2 h-2 rounded-full bg-emerald-500"></div>
+                    <span class="text-zinc-500">PLAYLIST_CREATED</span>
+                </div>
+                <div class="flex items-center gap-1.5">
+                    <div class="w-2 h-2 rounded-full bg-emerald-500"></div>
+                    <span class="text-zinc-500">SONG_ADDED_TO_PLAYLIST</span>
+                </div>
+                <div class="flex items-center gap-1.5">
+                    <div class="w-2 h-2 rounded-full bg-emerald-500"></div>
+                    <span class="text-zinc-500">PLAYBACK_STARTED</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = 'http://localhost:3001';
+        const MODELS = [
+            { id: 'mock', name: 'Mock (Playwright)', desc: 'Pure Playwright, no AI', badge: 'NO AI' },
+            { id: 'gemini-computer-use', name: 'Gemini', desc: "Google's vision agent" },
+            { id: 'claude-computer-use', name: 'Claude', desc: "Anthropic's control" },
+            { id: 'gpt-4-vision', name: 'GPT-4V', desc: "OpenAI vision" },
+        ];
+
+        let selectedModel = 'mock';
+        let executions = [];
+        let selectedExecution = null;
+        let apiConnected = false;
+
+        document.addEventListener('DOMContentLoaded', () => {
+            renderModels();
+            fetchExecutions();
+            setInterval(fetchExecutions, 5000);
+        });
+
+        function renderModels() {
+            const container = document.getElementById('model-selector');
+            container.innerHTML = MODELS.map(m => `
+                <button onclick="selectModel('${m.id}')" 
+                    class="w-full flex items-center gap-3 p-2.5 rounded-md text-left transition-colors ${selectedModel === m.id
+                    ? 'bg-zinc-800 border border-zinc-700'
+                    : 'bg-zinc-950 border border-zinc-800 hover:border-zinc-700'}">
+                    <div class="w-2 h-2 rounded-full ${selectedModel === m.id ? 'bg-emerald-500' : 'bg-zinc-700'}"></div>
+                    <div class="flex-1 min-w-0">
+                        <div class="flex items-center gap-2">
+                            <span class="text-sm font-medium text-zinc-200 truncate">${m.name}</span>
+                            ${m.badge ? `<span class="text-[9px] px-1.5 py-0.5 rounded bg-amber-950 text-amber-400 border border-amber-900 font-medium">${m.badge}</span>` : ''}
+                        </div>
+                        <div class="text-[11px] text-zinc-500 truncate">${m.desc}</div>
+                    </div>
+                </button>
+            `).join('');
+        }
+
+        function selectModel(id) {
+            selectedModel = id;
+            renderModels();
+        }
+
+        async function fetchExecutions() {
+            try {
+                const res = await fetch(`${API_BASE}/api/executions`);
+                if (!res.ok) throw new Error('Failed');
+                const data = await res.json();
+                executions = data.executions || [];
+                apiConnected = true;
+                updateUI();
+            } catch (e) {
+                apiConnected = false;
+                updateUI();
+            }
+        }
+
+        function updateUI() {
+            // API Status
+            const dot = document.getElementById('api-status-dot');
+            const txt = document.getElementById('api-status-text');
+            dot.className = `w-2 h-2 rounded-full ${apiConnected ? 'bg-emerald-500' : 'bg-red-500'}`;
+            txt.textContent = apiConnected ? 'Connected' : 'Disconnected';
+            txt.className = `text-xs ${apiConnected ? 'text-zinc-500' : 'text-red-400'}`;
+
+            // Stats
+            const passed = executions.filter(e => e.score === 1).length;
+            const failed = executions.filter(e => e.score === 0).length;
+            const rate = executions.length > 0 ? Math.round((passed / executions.length) * 100) : 0;
+            document.getElementById('stat-total').textContent = executions.length;
+            document.getElementById('stat-passed').textContent = passed;
+            document.getElementById('stat-failed').textContent = failed;
+            document.getElementById('stat-rate').textContent = rate + '%';
+
+            // Execution List
+            const list = document.getElementById('execution-list');
+            if (executions.length === 0) {
+                list.innerHTML = '<div class="text-zinc-600 text-sm text-center py-12">No executions yet</div>';
+            } else {
+                list.innerHTML = executions.map(e => `
+                    <button onclick="selectExecution('${e.id}')" 
+                        class="w-full p-3 rounded-md text-left transition-colors ${selectedExecution?.id === e.id
+                        ? 'bg-zinc-800 border border-zinc-700'
+                        : 'bg-zinc-950 border border-zinc-800 hover:border-zinc-700'}">
+                        <div class="flex items-center justify-between mb-1.5">
+                            <div class="flex items-center gap-2">
+                                <div class="w-2 h-2 rounded-full ${e.score === 1 ? 'bg-emerald-500' : 'bg-red-500'}"></div>
+                                <span class="text-xs font-medium ${e.score === 1 ? 'text-emerald-400' : 'text-red-400'}">${e.score === 1 ? 'PASS' : 'FAIL'}</span>
+                            </div>
+                            <span class="text-[10px] text-zinc-600 font-mono">${new Date(e.startTime).toLocaleTimeString()}</span>
+                        </div>
+                        <div class="text-[11px] text-zinc-500 font-mono truncate">${e.id}</div>
+                        ${e.humanReview ? `<div class="mt-2 inline-flex items-center px-2 py-0.5 rounded text-[10px] font-medium ${e.humanReview.decision === 'pass' ? 'bg-emerald-950 text-emerald-400 border border-emerald-900' : 'bg-red-950 text-red-400 border border-red-900'}">Human: ${e.humanReview.decision.toUpperCase()}</div>` : ''}
+                    </button>
+                `).join('');
+            }
+        }
+
+        async function selectExecution(id) {
+            selectedExecution = executions.find(e => e.id === id);
+            updateUI();
+            try {
+                const res = await fetch(`${API_BASE}/api/executions/${id}/screenshots`);
+                const data = await res.json();
+                renderDetails(selectedExecution, data.screenshots || []);
+            } catch (e) {
+                renderDetails(selectedExecution, []);
+            }
+        }
+
+        function renderDetails(exec, screenshots) {
+            if (!exec) return;
+            const duration = Math.round((new Date(exec.endTime) - new Date(exec.startTime)) / 1000);
+            const details = document.getElementById('execution-details');
+            details.innerHTML = `
+                <div class="space-y-4 text-left">
+                    <!-- Status Header -->
+                    <div class="flex items-center gap-4 p-4 rounded-lg ${exec.score === 1 ? 'bg-emerald-950/30 border border-emerald-900/50' : 'bg-red-950/30 border border-red-900/50'}">
+                        <div class="w-12 h-12 rounded-full flex items-center justify-center ${exec.score === 1 ? 'bg-emerald-500/20' : 'bg-red-500/20'}">
+                            ${exec.score === 1
+                    ? '<svg class="w-6 h-6 text-emerald-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>'
+                    : '<svg class="w-6 h-6 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>'
+                }
+                        </div>
+                        <div>
+                            <div class="text-lg font-semibold ${exec.score === 1 ? 'text-emerald-400' : 'text-red-400'}">${exec.score === 1 ? 'Passed' : 'Failed'}</div>
+                            <div class="text-sm text-zinc-500">${exec.passed ? 'All checks completed' : 'Some checks failed'}</div>
+                        </div>
+                    </div>
+
+                    <!-- Metadata -->
+                    <div class="grid grid-cols-2 gap-3">
+                        <div class="bg-zinc-950 rounded-md p-3 border border-zinc-800">
+                            <div class="text-[10px] text-zinc-600 uppercase tracking-wide mb-1">Execution ID</div>
+                            <div class="text-xs text-zinc-300 font-mono truncate">${exec.id}</div>
+                        </div>
+                        <div class="bg-zinc-950 rounded-md p-3 border border-zinc-800">
+                            <div class="text-[10px] text-zinc-600 uppercase tracking-wide mb-1">Duration</div>
+                            <div class="text-xs text-zinc-300">${duration}s</div>
+                        </div>
+                    </div>
+
+                    <!-- Playwright HTML Report Link -->
+                    <div class="bg-zinc-950 rounded-md p-3 border border-zinc-800">
+                        <div class="text-[10px] text-zinc-600 uppercase tracking-wide mb-2">Playwright Report</div>
+                        <a href="${API_BASE}/report" target="_blank"
+                           class="flex items-center gap-3 p-3 rounded-md bg-zinc-800 border border-zinc-700 hover:border-emerald-500/50 transition-colors group cursor-pointer">
+                            <div class="w-10 h-10 rounded-lg bg-emerald-500/10 flex items-center justify-center group-hover:bg-emerald-500/20 transition-colors">
+                                <svg class="w-5 h-5 text-emerald-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/>
+                                </svg>
+                            </div>
+                            <div class="flex-1">
+                                <div class="text-sm font-medium text-zinc-200 group-hover:text-emerald-400 transition-colors">View Playwright HTML Report</div>
+                                <div class="text-[11px] text-zinc-500">See test steps, screenshots, timing & traces</div>
+                            </div>
+                            <svg class="w-4 h-4 text-zinc-500 group-hover:text-emerald-400 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/>
+                            </svg>
+                        </a>
+                    </div>
+
+                    <!-- Screenshots -->
+                    <div class="bg-zinc-950 rounded-md p-3 border border-zinc-800">
+                        <div class="text-[10px] text-zinc-600 uppercase tracking-wide mb-2">Screenshots (${screenshots.length})</div>
+                        ${screenshots.length > 0 ? `
+                            <div class="flex gap-2 overflow-x-auto pb-2 hide-scrollbar">
+                                ${screenshots.map((s, i) => `
+                                    <img src="${API_BASE}${s.url}" alt="Step ${i + 1}" onclick="window.open('${API_BASE}${s.url}', '_blank')" 
+                                        class="w-20 h-14 object-cover rounded border border-zinc-700 hover:border-zinc-500 transition-colors cursor-pointer flex-shrink-0">
+                                `).join('')}
+                            </div>
+                        ` : '<div class="text-xs text-zinc-600 text-center py-4">No screenshots</div>'}
+                    </div>
+
+                    <!-- Human Review -->
+                    <div class="bg-zinc-950 rounded-md p-3 border border-zinc-800">
+                        <div class="text-[10px] text-zinc-600 uppercase tracking-wide mb-2">Human Review</div>
+                        ${exec.humanReview ? `
+                            <div class="inline-flex items-center gap-2 px-3 py-1.5 rounded-md ${exec.humanReview.decision === 'pass' ? 'bg-emerald-950 border border-emerald-900' : 'bg-red-950 border border-red-900'}">
+                                ${exec.humanReview.decision === 'pass'
+                        ? '<svg class="w-4 h-4 text-emerald-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>'
+                        : '<svg class="w-4 h-4 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>'
+                    }
+                                <span class="text-sm font-medium ${exec.humanReview.decision === 'pass' ? 'text-emerald-400' : 'text-red-400'}">${exec.humanReview.decision === 'pass' ? 'Approved' : 'Rejected'}</span>
+                            </div>
+                        ` : `
+                            <div class="flex gap-2">
+                                <button onclick="submitReview('${exec.id}', 'pass')" class="flex-1 py-2 px-3 rounded-md text-sm font-medium bg-zinc-800 text-emerald-400 border border-zinc-700 hover:bg-zinc-750 transition-colors flex items-center justify-center gap-2">
+                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+                                    Approve
+                                </button>
+                                <button onclick="submitReview('${exec.id}', 'fail')" class="flex-1 py-2 px-3 rounded-md text-sm font-medium bg-zinc-800 text-red-400 border border-zinc-700 hover:bg-zinc-750 transition-colors flex items-center justify-center gap-2">
+                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+                                    Reject
+                                </button>
+                            </div>
+                        `}
+                    </div>
+                </div>
+            `;
+        }
+
+        async function runExecution() {
+            if (!apiConnected) {
+                showError('API server not connected');
+                return;
+            }
+            const btn = document.getElementById('run-btn');
+            btn.disabled = true;
+            btn.className = 'w-full mt-4 py-2.5 px-4 rounded-md font-medium text-sm bg-zinc-800 text-zinc-500 cursor-not-allowed flex items-center justify-center gap-2';
+            btn.innerHTML = '<svg class="animate-spin h-4 w-4" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" fill="none"/><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg>Running...';
+
+            let newExecutionId = null;
+
+            try {
+                const res = await fetch(`${API_BASE}/api/run`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ model: selectedModel }),
+                });
+                const data = await res.json();
+                newExecutionId = data.executionId;
+                console.log('Started execution:', newExecutionId);
+            } catch (e) {
+                showError('Failed to start execution');
+            }
+
+            // Poll more frequently while execution is running
+            const pollInterval = setInterval(async () => {
+                await fetchExecutions();
+                // Auto-select the new execution if it exists
+                if (newExecutionId) {
+                    const newExec = executions.find(e => e.id === newExecutionId);
+                    if (newExec) {
+                        selectExecution(newExecutionId);
+                        // Stop polling when execution is complete
+                        if (newExec.endTime) {
+                            clearInterval(pollInterval);
+                        }
+                    }
+                }
+            }, 1000);
+
+            // Stop intensive polling after 30 seconds
+            setTimeout(() => {
+                clearInterval(pollInterval);
+                btn.disabled = false;
+                btn.className = 'w-full mt-4 py-2.5 px-4 rounded-md font-medium text-sm bg-zinc-100 text-zinc-900 hover:bg-zinc-200 transition-colors flex items-center justify-center gap-2';
+                btn.innerHTML = '<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>Run Execution';
+            }, 30000);
+        }
+
+        async function submitReview(id, decision) {
+            try {
+                await fetch(`${API_BASE}/api/executions/${id}/review`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ decision }),
+                });
+                fetchExecutions();
+                setTimeout(() => selectExecution(id), 500);
+            } catch (e) {
+                showError('Failed to save review');
+            }
+        }
+
+        function showError(msg) {
+            document.getElementById('error-message').textContent = msg;
+            document.getElementById('error-banner').classList.remove('hidden');
+        }
+
+        function hideError() {
+            document.getElementById('error-banner').classList.add('hidden');
+        }
+
+        function openTraceViewer(id) {
+            // Open trace.playwright.dev with the trace URL pre-loaded
+            const traceUrl = `${API_BASE}/api/trace/${id}`;
+            const viewerUrl = `https://trace.playwright.dev/?trace=${encodeURIComponent(traceUrl)}`;
+            window.open(viewerUrl, '_blank');
+        }
+    </script>
+</body>
+
+</html>

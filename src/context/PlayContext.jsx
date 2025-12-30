@@ -56,6 +56,34 @@ const PlayContextProvider = (props) => {
     show: false,
   });
 
+  // Action logging for verification system
+  const [actionLog, setActionLog] = useState([]);
+
+  // Action types for verification
+  const ACTION_TYPES = {
+    PLAYLIST_CREATED: 'PLAYLIST_CREATED',
+    SONG_ADDED_TO_PLAYLIST: 'SONG_ADDED_TO_PLAYLIST',
+    PLAYBACK_STARTED: 'PLAYBACK_STARTED',
+    PLAYBACK_PAUSED: 'PLAYBACK_PAUSED',
+  };
+
+  // Log an action for verification
+  const logAction = (type, payload) => {
+    const action = {
+      id: Date.now(),
+      type,
+      payload,
+      timestamp: new Date().toISOString(),
+    };
+    setActionLog(prev => [...prev, action]);
+    console.log('[ActionLog]', action);
+  };
+
+  // Clear action log (for new test runs)
+  const clearActionLog = () => {
+    setActionLog([]);
+  };
+
   // Create a new playlist
   const createPlaylist = () => {
     const newPlaylist = {
@@ -68,17 +96,24 @@ const PlayContextProvider = (props) => {
     };
     setPlaylists(prev => [newPlaylist, ...prev]);
     setNextPlaylistNumber(prev => prev + 1);
+    // Log action for verification
+    logAction(ACTION_TYPES.PLAYLIST_CREATED, {
+      playlistId: newPlaylist.id,
+      playlistName: newPlaylist.name,
+    });
     return newPlaylist;
   };
 
   // Add song to playlist
   const addToPlaylist = (playlistId, song) => {
+    let songAdded = false;
     setPlaylists(prev => prev.map(playlist => {
       if (playlist.id === playlistId) {
         // Check if song already exists
         if (playlist.songs.find(s => s.id === song.id)) {
           return playlist;
         }
+        songAdded = true;
         return {
           ...playlist,
           songs: [...playlist.songs, song],
@@ -88,6 +123,14 @@ const PlayContextProvider = (props) => {
       }
       return playlist;
     }));
+    // Log action for verification (only if song was actually added)
+    if (songAdded || !playlists.find(p => p.id === playlistId)?.songs.find(s => s.id === song.id)) {
+      logAction(ACTION_TYPES.SONG_ADDED_TO_PLAYLIST, {
+        playlistId,
+        songId: song.id,
+        songName: song.name,
+      });
+    }
     hideContextMenu();
   };
 
@@ -165,9 +208,15 @@ const PlayContextProvider = (props) => {
   };
 
   const plaWithID = async (id) => {
-    await setTrack(songsData[id]);
+    const song = songsData[id];
+    await setTrack(song);
     await audioRef.current.play();
     setPlayStatus(true);
+    // Log action for verification
+    logAction(ACTION_TYPES.PLAYBACK_STARTED, {
+      songId: song.id,
+      songName: song.name,
+    });
   };
 
   const previous = async () => {
@@ -228,6 +277,38 @@ const PlayContextProvider = (props) => {
     return () => document.removeEventListener("click", handleClick);
   }, [contextMenu.show]);
 
+  // Expose state to window for external verification (Playwright tests)
+  useEffect(() => {
+    window.__SPOTIFY_CLONE_STATE__ = {
+      actionLog,
+      playlists,
+      currentTrack: track,
+      isPlaying: playStatus,
+      getActionLog: () => actionLog,
+      clearActionLog,
+      // Verify specific task
+      verifyTask: (taskType) => {
+        switch (taskType) {
+          case 'CREATE_PLAYLIST_ADD_SONG_PLAY':
+            const hasPlaylistCreated = actionLog.some(a => a.type === 'PLAYLIST_CREATED');
+            const hasSongAdded = actionLog.some(a => a.type === 'SONG_ADDED_TO_PLAYLIST');
+            const hasPlaybackStarted = actionLog.some(a => a.type === 'PLAYBACK_STARTED');
+            return {
+              score: (hasPlaylistCreated && hasSongAdded && hasPlaybackStarted) ? 1 : 0,
+              passed: hasPlaylistCreated && hasSongAdded && hasPlaybackStarted,
+              details: {
+                playlistCreated: hasPlaylistCreated,
+                songAdded: hasSongAdded,
+                playbackStarted: hasPlaybackStarted,
+              }
+            };
+          default:
+            return { score: 0, passed: false, details: { error: 'Unknown task type' } };
+        }
+      }
+    };
+  }, [actionLog, playlists, track, playStatus]);
+
   const contextValue = {
     audioRef,
     seekBg,
@@ -256,6 +337,9 @@ const PlayContextProvider = (props) => {
     hideContextMenu,
     playlistSubmenu,
     togglePlaylistSubmenu,
+    // Action logging (for verification)
+    actionLog,
+    clearActionLog,
   };
 
   return (
