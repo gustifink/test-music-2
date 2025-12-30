@@ -280,9 +280,9 @@
         const API_BASE = 'http://localhost:3001';
         const MODELS = [
             { id: 'mock', name: 'Mock (Playwright)', desc: 'Pure Playwright, no AI', badge: 'NO AI' },
-            { id: 'gemini-computer-use', name: 'Gemini', desc: "Google's vision agent" },
-            { id: 'claude-computer-use', name: 'Claude', desc: "Anthropic's control" },
-            { id: 'gpt-4-vision', name: 'GPT-4V', desc: "OpenAI vision" },
+            { id: 'gemini-computer-use', name: 'Gemini 2.5 Computer Use', desc: "Google's vision agent", badge: 'COMING SOON', disabled: true },
+            { id: 'claude-computer-use', name: 'Opus 4.5', desc: "Anthropic's control" },
+            { id: 'gpt-4-vision', name: 'GPT 5.2', desc: "OpenAI vision" },
         ];
 
         let selectedModel = 'mock';
@@ -299,15 +299,17 @@
         function renderModels() {
             const container = document.getElementById('model-selector');
             container.innerHTML = MODELS.map(m => `
-                <button onclick="selectModel('${m.id}')" 
-                    class="w-full flex items-center gap-3 p-2.5 rounded-md text-left transition-colors ${selectedModel === m.id
-                    ? 'bg-zinc-800 border border-zinc-700'
-                    : 'bg-zinc-950 border border-zinc-800 hover:border-zinc-700'}">
-                    <div class="w-2 h-2 rounded-full ${selectedModel === m.id ? 'bg-emerald-500' : 'bg-zinc-700'}"></div>
+                <button onclick="${m.disabled ? '' : `selectModel('${m.id}')`}" 
+                    class="w-full flex items-center gap-3 p-2.5 rounded-md text-left transition-colors ${m.disabled
+                    ? 'bg-zinc-950 border border-zinc-800 opacity-50 cursor-not-allowed'
+                    : selectedModel === m.id
+                        ? 'bg-zinc-800 border border-zinc-700'
+                        : 'bg-zinc-950 border border-zinc-800 hover:border-zinc-700'}" ${m.disabled ? 'disabled' : ''}>
+                    <div class="w-2 h-2 rounded-full ${m.disabled ? 'bg-zinc-600' : selectedModel === m.id ? 'bg-emerald-500' : 'bg-zinc-700'}"></div>
                     <div class="flex-1 min-w-0">
                         <div class="flex items-center gap-2">
-                            <span class="text-sm font-medium text-zinc-200 truncate">${m.name}</span>
-                            ${m.badge ? `<span class="text-[9px] px-1.5 py-0.5 rounded bg-amber-950 text-amber-400 border border-amber-900 font-medium">${m.badge}</span>` : ''}
+                            <span class="text-sm font-medium ${m.disabled ? 'text-zinc-500' : 'text-zinc-200'} truncate">${m.name}</span>
+                            ${m.badge ? `<span class="text-[9px] px-1.5 py-0.5 rounded ${m.disabled ? 'bg-zinc-800 text-zinc-500 border border-zinc-700' : 'bg-amber-950 text-amber-400 border border-amber-900'} font-medium">${m.badge}</span>` : ''}
                         </div>
                         <div class="text-[11px] text-zinc-500 truncate">${m.desc}</div>
                     </div>
