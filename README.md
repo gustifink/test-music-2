@@ -78,12 +78,14 @@ npx playwright install
 1. **Start the music player** (in one terminal):
 
    ```bash
+   cd test-music-2
    npm run dev
    ```
 
 2. **Start the Verifier API** (in another terminal):
 
    ```bash
+   cd test-music-2
    npm run api
    ```
 
