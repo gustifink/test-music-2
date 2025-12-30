@@ -54,6 +54,47 @@ To run the project locally, follow these steps:
 - **Add to Playlist**: Right-click any song or use the "..." button to add to a playlist
 - **Responsive**: Resize your browser or view on mobile to experience the responsive design
 
+## 🤖 **AI Model Verifier**
+
+This project includes an **AI Model Verifier** - a Playwright-based testing framework for automated task verification.
+
+### Features
+
+- **Headed Browser Execution**: Watch the browser perform tasks in real-time
+- **Execution History**: Track all test runs with pass/fail status
+- **HTML Report Viewer**: Detailed step-by-step test analysis with screenshots
+- **Screenshot Capture**: Automatic screenshots at each step for debugging
+
+### Running the Verifier
+
+1. **Start the music player** (in one terminal):
+
+   ```bash
+   npm run dev
+   ```
+
+2. **Start the Verifier API** (in another terminal):
+
+   ```bash
+   node executor/api-server.js
+   ```
+
+3. **Open the Verifier UI**:
+   - Go to `http://localhost:3001`
+   - Click "Run Execution" to start a test
+   - Watch the browser perform: Create playlist → Add song → Play it
+   - View results in History and the HTML Report
+
+### Test Task
+
+The verifier tests the complete user flow:
+
+1. Create a new playlist
+2. Navigate to an existing playlist with songs
+3. Add a song to the new playlist via context menu
+4. Navigate to the new playlist
+5. Play the added song
+
 ## 📂 **Folder Structure**
 
 ```bash
