@@ -153,9 +153,17 @@ async function handleRequest(req, res) {
             if (pathname === '/report' || pathname === '/report/') {
                 filePath = path.join(reportDir, 'index.html');
             } else {
-                // Serve sub-paths (data, trace, etc.)
-                const subPath = pathname.replace('/report/', '');
+                // Serve sub-paths (data/, trace/, trace-attachments/, etc.)
+                const subPath = pathname.slice('/report/'.length);
                 filePath = path.join(reportDir, subPath);
+            }
+
+            // Security check: ensure path is within reportDir
+            const resolvedPath = path.resolve(filePath);
+            if (!resolvedPath.startsWith(path.resolve(reportDir))) {
+                res.writeHead(403);
+                res.end('Forbidden');
+                return;
             }
 
             if (!fs.existsSync(filePath)) {
@@ -172,7 +180,11 @@ async function handleRequest(req, res) {
                 '.json': 'application/json',
                 '.png': 'image/png',
                 '.jpg': 'image/jpeg',
+                '.jpeg': 'image/jpeg',
+                '.webm': 'video/webm',
+                '.webp': 'image/webp',
                 '.zip': 'application/zip',
+                '.svg': 'image/svg+xml',
             };
             const contentType = mimeTypes[ext] || 'application/octet-stream';
 
