@@ -57,6 +57,25 @@ function sendJson(res, data, status = 200) {
 }
 
 /**
+ * Recursively copy a directory
+ */
+function copyDirSync(src, dest) {
+    if (!fs.existsSync(dest)) {
+        fs.mkdirSync(dest, { recursive: true });
+    }
+    const entries = fs.readdirSync(src, { withFileTypes: true });
+    for (const entry of entries) {
+        const srcPath = path.join(src, entry.name);
+        const destPath = path.join(dest, entry.name);
+        if (entry.isDirectory()) {
+            copyDirSync(srcPath, destPath);
+        } else {
+            fs.copyFileSync(srcPath, destPath);
+        }
+    }
+}
+
+/**
  * Handle API requests
  */
 async function handleRequest(req, res) {
@@ -145,7 +164,55 @@ async function handleRequest(req, res) {
             return;
         }
 
-        // GET /report/* - Serve Playwright HTML Report
+        // GET /report/:executionId/* - Serve per-execution Playwright HTML Report
+        if (pathname.match(/^\/report\/\d+/) && req.method === 'GET') {
+            const parts = pathname.split('/');
+            const executionId = parts[2];
+            const subPath = parts.slice(3).join('/') || 'index.html';
+
+            const reportDir = path.join(EXECUTIONS_DIR, executionId, 'playwright-report');
+            const filePath = path.join(reportDir, subPath);
+
+            // Security check: ensure path is within reportDir
+            const resolvedPath = path.resolve(filePath);
+            if (!resolvedPath.startsWith(path.resolve(reportDir))) {
+                res.writeHead(403);
+                res.end('Forbidden');
+                return;
+            }
+
+            if (!fs.existsSync(filePath)) {
+                res.writeHead(404);
+                res.end(`Report not found for execution ${executionId}. The report may not have been generated yet.`);
+                return;
+            }
+
+            const ext = path.extname(filePath).toLowerCase();
+            const mimeTypes = {
+                '.html': 'text/html',
+                '.js': 'application/javascript',
+                '.css': 'text/css',
+                '.json': 'application/json',
+                '.png': 'image/png',
+                '.jpg': 'image/jpeg',
+                '.jpeg': 'image/jpeg',
+                '.webm': 'video/webm',
+                '.webp': 'image/webp',
+                '.zip': 'application/zip',
+                '.svg': 'image/svg+xml',
+                '.ttf': 'font/ttf',
+            };
+            const contentType = mimeTypes[ext] || 'application/octet-stream';
+
+            res.writeHead(200, {
+                ...corsHeaders,
+                'Content-Type': contentType,
+            });
+            fs.createReadStream(filePath).pipe(res);
+            return;
+        }
+
+        // GET /report/* - Serve global Playwright HTML Report (fallback)
         if (pathname.startsWith('/report') && req.method === 'GET') {
             const reportDir = path.join(process.cwd(), 'playwright-report');
             let filePath;
@@ -251,6 +318,9 @@ async function handleRequest(req, res) {
                 fs.mkdirSync(executionDir, { recursive: true });
             }
 
+            // Create per-execution report directory
+            const executionReportDir = path.join(executionDir, 'playwright-report');
+
             const startTime = new Date().toISOString();
             const initialResult = {
                 executionId,
@@ -264,10 +334,20 @@ async function handleRequest(req, res) {
             fs.writeFileSync(path.join(executionDir, 'result.json'), JSON.stringify(initialResult, null, 2));
 
             // Run the actual Playwright test with visible browser (--headed)
+            // Output report to execution-specific directory
             const { spawn } = await import('child_process');
-            const child = spawn('npx', ['playwright', 'test', '--headed', '--reporter=html,list,json'], {
+            const child = spawn('npx', [
+                'playwright', 'test', '--headed',
+                `--reporter=html`,
+                `--output=${path.join(executionDir, 'test-results')}`
+            ], {
                 cwd: process.cwd(),
-                env: { ...process.env, MODEL: model, EXECUTION_ID: executionId },
+                env: {
+                    ...process.env,
+                    MODEL: model,
+                    EXECUTION_ID: executionId,
+                    PLAYWRIGHT_HTML_REPORT: executionReportDir,
+                },
                 stdio: 'inherit',
                 shell: true,
             });
@@ -299,7 +379,7 @@ async function handleRequest(req, res) {
                 fs.writeFileSync(path.join(executionDir, 'result.json'), JSON.stringify(finalResult, null, 2));
 
                 // Copy screenshots from test-results to execution directory
-                const testResultsDir = path.join(process.cwd(), 'test-results');
+                const testResultsDir = path.join(executionDir, 'test-results');
                 if (fs.existsSync(testResultsDir)) {
                     const screenshots = fs.readdirSync(testResultsDir).filter(f => f.endsWith('.png'));
                     screenshots.forEach(file => {
@@ -314,6 +394,31 @@ async function handleRequest(req, res) {
                     });
                     console.log(`[API] Copied ${screenshots.length} screenshots to execution ${executionId}`);
                 }
+
+                // Also copy from global test-results if execution-specific didn't work
+                const globalTestResultsDir = path.join(process.cwd(), 'test-results');
+                if (fs.existsSync(globalTestResultsDir)) {
+                    const screenshots = fs.readdirSync(globalTestResultsDir).filter(f => f.endsWith('.png'));
+                    screenshots.forEach(file => {
+                        try {
+                            fs.copyFileSync(
+                                path.join(globalTestResultsDir, file),
+                                path.join(executionDir, file)
+                            );
+                        } catch (e) {
+                            // Ignore copy errors
+                        }
+                    });
+                }
+
+                // Copy global playwright-report to execution directory if per-execution didn't generate
+                const globalReportDir = path.join(process.cwd(), 'playwright-report');
+                if (!fs.existsSync(executionReportDir) && fs.existsSync(globalReportDir)) {
+                    console.log(`[API] Copying global report to execution ${executionId}`);
+                    copyDirSync(globalReportDir, executionReportDir);
+                }
+
+                console.log(`[API] Execution ${executionId} complete. Report at ${executionReportDir}`);
             });
 
             sendJson(res, {
