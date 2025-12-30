@@ -28,13 +28,13 @@ To run the project locally, follow these steps:
 1. **Clone** the repository to your local machine.
 
    ```bash
-   git clone https://github.com/gustifink/test-music.git
+   git clone https://github.com/gustifink/test-music-2.git
    ```
 
 2. **Install dependencies**:
 
    ```bash
-   cd test-music
+   cd test-music-2
    npm install
    ```
 
@@ -98,7 +98,7 @@ The verifier tests the complete user flow:
 ## 📂 **Folder Structure**
 
 ```bash
-test-music/
+test-music-2/
 ├── public/                 # Public assets
 └── src/                    # Source code files
     ├── App.jsx             # Main App component
